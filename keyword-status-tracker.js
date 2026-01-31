@@ -7,7 +7,7 @@
  *
  * Tracks changes in:
  * - Keyword status (ENABLED, PAUSED, REMOVED)
- * - Approval status (APPROVED, APPROVED_LIMITED, DISAPPROVED, UNDER_REVIEW)
+ * - System serving status (ELIGIBLE, ELIGIBLE_LIMITED, NOT_ELIGIBLE, etc.)
  *
  * @author: Based on Nils Rooijmans' disapproved ads script pattern
  *
@@ -50,8 +50,8 @@ var STATUS_LOG_HEADER = [
   "Match Type",
   "Previous Status",
   "New Status",
-  "Previous Approval Status",
-  "New Approval Status",
+  "Previous Serving Status",
+  "New Serving Status",
   "Change Type"
 ];
 
@@ -62,7 +62,7 @@ var SNAPSHOT_HEADER = [
   "Keyword Text",
   "Match Type",
   "Status",
-  "Approval Status",
+  "Serving Status",
   "Last Updated"
 ];
 
@@ -154,7 +154,7 @@ function getKeywordSnapshot(sheet) {
         keywordText: row[3],
         matchType: row[4],
         status: row[5],
-        approvalStatus: row[6],
+        servingStatus: row[6],
         lastUpdated: row[7]
       };
     }
@@ -179,7 +179,7 @@ function getCurrentKeywordStatuses() {
     "ad_group_criterion.keyword.text, " +
     "ad_group_criterion.keyword.match_type, " +
     "ad_group_criterion.status, " +
-    "ad_group_criterion.approval_status " +
+    "ad_group_criterion.system_serving_status " +
     "FROM keyword_view " +
     "WHERE ad_group_criterion.type = 'KEYWORD' " +
     "AND campaign.status != 'REMOVED' " +
@@ -202,7 +202,7 @@ function getCurrentKeywordStatuses() {
         keywordText: row.adGroupCriterion.keyword.text,
         matchType: row.adGroupCriterion.keyword.matchType,
         status: row.adGroupCriterion.status,
-        approvalStatus: row.adGroupCriterion.approvalStatus || 'UNKNOWN'
+        servingStatus: row.adGroupCriterion.systemServingStatus || 'UNKNOWN'
       };
     }
   } catch (e) {
@@ -244,18 +244,18 @@ function detectStatusChanges(previousSnapshot, currentKeywords) {
           matchType: current.matchType,
           previousStatus: 'N/A',
           newStatus: current.status,
-          previousApprovalStatus: 'N/A',
-          newApprovalStatus: current.approvalStatus,
+          previousServingStatus: 'N/A',
+          newServingStatus: current.servingStatus,
           changeType: 'NEW_KEYWORD'
         });
       }
     } else {
       // Existing keyword - check for status changes
       var statusChanged = previous.status !== current.status;
-      var approvalChanged = previous.approvalStatus !== current.approvalStatus;
+      var servingChanged = previous.servingStatus !== current.servingStatus;
 
-      if (statusChanged || approvalChanged) {
-        var changeType = getChangeType(statusChanged, approvalChanged, current.status, current.approvalStatus);
+      if (statusChanged || servingChanged) {
+        var changeType = getChangeType(statusChanged, servingChanged, current.status, current.servingStatus);
 
         changes.push({
           timestamp: timestamp,
@@ -268,8 +268,8 @@ function detectStatusChanges(previousSnapshot, currentKeywords) {
           matchType: current.matchType,
           previousStatus: previous.status,
           newStatus: current.status,
-          previousApprovalStatus: previous.approvalStatus,
-          newApprovalStatus: current.approvalStatus,
+          previousServingStatus: previous.servingStatus,
+          newServingStatus: current.servingStatus,
           changeType: changeType
         });
       }
@@ -292,8 +292,8 @@ function detectStatusChanges(previousSnapshot, currentKeywords) {
         matchType: previous.matchType,
         previousStatus: previous.status,
         newStatus: 'REMOVED',
-        previousApprovalStatus: previous.approvalStatus,
-        newApprovalStatus: 'N/A',
+        previousServingStatus: previous.servingStatus,
+        newServingStatus: 'N/A',
         changeType: 'KEYWORD_REMOVED'
       });
     }
@@ -306,12 +306,12 @@ function detectStatusChanges(previousSnapshot, currentKeywords) {
 /**
  * Determines the type of change for logging purposes
  * @param {boolean} statusChanged Whether the status changed
- * @param {boolean} approvalChanged Whether the approval status changed
+ * @param {boolean} servingChanged Whether the serving status changed
  * @param {string} newStatus The new status
- * @param {string} newApprovalStatus The new approval status
+ * @param {string} newServingStatus The new serving status
  * @return {string} The change type description
  */
-function getChangeType(statusChanged, approvalChanged, newStatus, newApprovalStatus) {
+function getChangeType(statusChanged, servingChanged, newStatus, newServingStatus) {
   var types = [];
 
   if (statusChanged) {
@@ -326,17 +326,17 @@ function getChangeType(statusChanged, approvalChanged, newStatus, newApprovalSta
     }
   }
 
-  if (approvalChanged) {
-    if (newApprovalStatus === 'DISAPPROVED') {
-      types.push('DISAPPROVED');
-    } else if (newApprovalStatus === 'APPROVED') {
-      types.push('APPROVED');
-    } else if (newApprovalStatus === 'APPROVED_LIMITED') {
-      types.push('APPROVED_LIMITED');
-    } else if (newApprovalStatus === 'UNDER_REVIEW') {
-      types.push('UNDER_REVIEW');
+  if (servingChanged) {
+    if (newServingStatus === 'ELIGIBLE') {
+      types.push('ELIGIBLE');
+    } else if (newServingStatus === 'ELIGIBLE_LIMITED') {
+      types.push('ELIGIBLE_LIMITED');
+    } else if (newServingStatus === 'NOT_ELIGIBLE') {
+      types.push('NOT_ELIGIBLE');
+    } else if (newServingStatus === 'RARELY_SERVED') {
+      types.push('RARELY_SERVED');
     } else {
-      types.push('APPROVAL_CHANGED');
+      types.push('SERVING_CHANGED');
     }
   }
 
@@ -365,8 +365,8 @@ function logStatusChanges(sheet, changes) {
       change.matchType,
       change.previousStatus,
       change.newStatus,
-      change.previousApprovalStatus,
-      change.newApprovalStatus,
+      change.previousServingStatus,
+      change.newServingStatus,
       change.changeType
     ]);
   }
@@ -404,7 +404,7 @@ function updateKeywordSnapshot(sheet, currentKeywords) {
       keyword.keywordText,
       keyword.matchType,
       keyword.status,
-      keyword.approvalStatus,
+      keyword.servingStatus,
       timestamp
     ]);
   }
@@ -518,17 +518,17 @@ function sendSlackAlert(changes) {
   if (summary.removed > 0) {
     message += '\u2022 Keywords Removed: ' + summary.removed + '\n';
   }
-  if (summary.disapproved > 0) {
-    message += '\u2022 Keywords Disapproved: ' + summary.disapproved + '\n';
+  if (summary.eligible > 0) {
+    message += '\u2022 Keywords Eligible: ' + summary.eligible + '\n';
   }
-  if (summary.approved > 0) {
-    message += '\u2022 Keywords Approved: ' + summary.approved + '\n';
+  if (summary.eligibleLimited > 0) {
+    message += '\u2022 Keywords Eligible (Limited): ' + summary.eligibleLimited + '\n';
   }
-  if (summary.approvedLimited > 0) {
-    message += '\u2022 Keywords Approved (Limited): ' + summary.approvedLimited + '\n';
+  if (summary.notEligible > 0) {
+    message += '\u2022 Keywords Not Eligible: ' + summary.notEligible + '\n';
   }
-  if (summary.underReview > 0) {
-    message += '\u2022 Keywords Under Review: ' + summary.underReview + '\n';
+  if (summary.rarelyServed > 0) {
+    message += '\u2022 Keywords Rarely Served: ' + summary.rarelyServed + '\n';
   }
   if (summary.newKeywords > 0) {
     message += '\u2022 New Keywords Added: ' + summary.newKeywords + '\n';
@@ -554,10 +554,10 @@ function categorizeChanges(changes) {
     enabled: 0,
     paused: 0,
     removed: 0,
-    disapproved: 0,
-    approved: 0,
-    approvedLimited: 0,
-    underReview: 0,
+    eligible: 0,
+    eligibleLimited: 0,
+    notEligible: 0,
+    rarelyServed: 0,
     newKeywords: 0,
     other: 0
   };
@@ -573,14 +573,14 @@ function categorizeChanges(changes) {
       summary.paused++;
     } else if (changeType === 'KEYWORD_REMOVED' || changeType.indexOf('REMOVED') !== -1) {
       summary.removed++;
-    } else if (changeType.indexOf('DISAPPROVED') !== -1) {
-      summary.disapproved++;
-    } else if (changeType.indexOf('APPROVED_LIMITED') !== -1) {
-      summary.approvedLimited++;
-    } else if (changeType.indexOf('APPROVED') !== -1) {
-      summary.approved++;
-    } else if (changeType.indexOf('UNDER_REVIEW') !== -1) {
-      summary.underReview++;
+    } else if (changeType.indexOf('ELIGIBLE_LIMITED') !== -1) {
+      summary.eligibleLimited++;
+    } else if (changeType.indexOf('NOT_ELIGIBLE') !== -1) {
+      summary.notEligible++;
+    } else if (changeType.indexOf('RARELY_SERVED') !== -1) {
+      summary.rarelyServed++;
+    } else if (changeType.indexOf('ELIGIBLE') !== -1) {
+      summary.eligible++;
     } else {
       summary.other++;
     }
