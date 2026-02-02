@@ -182,7 +182,7 @@ function getCurrentKeywordStatuses() {
     "ad_group_criterion.system_serving_status " +
     "FROM keyword_view " +
     "WHERE ad_group_criterion.type = 'KEYWORD' " +
-    "AND campaign.status != 'REMOVED' " +
+    "AND campaign.status = 'ENABLED' " +
     "AND ad_group.status != 'REMOVED'";
 
   Logger.log("GAQL Query: %s", gaqlQuery);
