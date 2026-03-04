@@ -1,0 +1,33 @@
+name: SERP Ad Scraper
+
+on:
+  schedule:
+    # Runs daily at 8am UTC (8am GMT / 9am BST)
+    - cron: "0 8 * * *"
+  workflow_dispatch: # Allow manual runs
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: serp-ad-scraper
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run scraper
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: node index.js

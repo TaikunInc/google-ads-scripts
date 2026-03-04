@@ -1,0 +1,12 @@
+{
+  "name": "serp-ad-scraper",
+  "version": "1.0.0",
+  "description": "Scrapes Google SERPs for competitor ad copy and logs changes to Google Sheets",
+  "main": "index.js",
+  "scripts": {
+    "scrape": "node index.js"
+  },
+  "dependencies": {
+    "googleapis": "^131.0.0"
+  }
+}
