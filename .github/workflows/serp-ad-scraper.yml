@@ -9,10 +9,6 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: serp-ad-scraper
-
     steps:
       - uses: actions/checkout@v4
 

@@ -1,192 +1,72 @@
-# Google Ads Scripts
+# Google SERP Ad Scraper
 
-A collection of Google Ads scripts for monitoring status changes and automation.
+Monitors competitor ad copy on Google Search by scraping SERPs for a set of keywords and tracking changes over time.
 
-## Scripts Overview
+Runs as a scheduled GitHub Actions workflow. Results are logged to Google Sheets.
 
-| Script | Description |
-|--------|-------------|
-| `keyword-status-tracker.js` | Monitors keyword status and serving status changes |
-| `ad-group-status-tracker.js` | Monitors ad group status changes |
-| `ad-status-tracker.js` | Monitors ad status and approval status changes |
+## What it does
 
-All scripts support:
-- Logging changes to Google Sheets
-- Optional Slack notifications
-- Automatic snapshot management for change detection
+- Searches Google for your keywords (geo-targeted to the **UK**)
+- Extracts all paid ads — headlines, descriptions, display URLs, sitelinks
+- Logs every ad seen to a running **Ad Copy Log** sheet
+- Maintains a **Snapshot** of unique ads with first/last seen dates and frequency
+- Detects **new ads**, **changed descriptions**, and **disappeared ads** between runs
+- Sends **Slack notifications** when changes are detected (optional)
 
----
+## Setup
 
-## Keyword Status Tracker
+### 1. SerpApi
 
-`keyword-status-tracker.js` - Monitors keyword status changes and logs them to a Google Sheet.
+Sign up at [serpapi.com](https://serpapi.com) and get an API key. The free tier provides 100 searches/month.
 
-### Features
+### 2. Google Sheets
 
-- Tracks keyword status changes (ENABLED, PAUSED, REMOVED)
-- Tracks system serving status changes (ELIGIBLE, ELIGIBLE_LIMITED, NOT_ELIGIBLE, RARELY_SERVED)
-- Detects new keywords added to the account
-- Detects keywords removed from the account
-- Logs all changes with timestamps to a Google Sheet
-- Sends Slack notifications when changes are detected
+1. Create a new Google Sheet (the script will auto-create the required tabs)
+2. Copy the Sheet ID from the URL: `https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit`
 
-### Required Sheets
+### 3. Google Service Account
 
-- `Status Log` - Where status changes are recorded
-- `Keyword Snapshot` - Stores the last known status of each keyword
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a project (or use existing) and enable the **Google Sheets API**
+3. Create a **Service Account** and download the JSON key
+4. Share your Google Sheet with the service account email address (as Editor)
 
-### Status Log Columns
+### 4. GitHub Secrets
 
-| Column | Description |
-|--------|-------------|
-| Timestamp | When the change was detected |
-| Account Name | Google Ads account name |
-| Account ID | Google Ads account ID |
-| Campaign Name | Campaign containing the keyword |
-| AdGroup Name | Ad group containing the keyword |
-| Keyword ID | Unique identifier for the keyword |
-| Keyword Text | The actual keyword text |
-| Match Type | EXACT, PHRASE, or BROAD |
-| Previous Status | Status before the change |
-| New Status | Status after the change |
-| Previous Serving Status | Serving status before the change |
-| New Serving Status | Serving status after the change |
-| Change Type | Description of the change type |
+Add these secrets in your repo under **Settings > Secrets and variables > Actions**:
 
----
+| Secret | Description |
+|---|---|
+| `SERPAPI_KEY` | Your SerpApi API key |
+| `GOOGLE_SHEETS_ID` | The Sheet ID from step 2 |
+| `GOOGLE_CREDENTIALS` | The full JSON contents of your service account key file |
+| `KEYWORDS` | Comma-separated keywords, e.g. `buy widgets uk,best widget supplier` |
+| `SLACK_WEBHOOK_URL` | *(Optional)* Slack incoming webhook URL |
 
-## Ad Group Status Tracker
+### 5. Schedule
 
-`ad-group-status-tracker.js` - Monitors ad group status changes and logs them to a Google Sheet.
+The workflow runs daily at 8am UTC by default. Edit `.github/workflows/serp-ad-scraper.yml` to change the cron schedule.
 
-### Features
+You can also trigger it manually from the **Actions** tab using "Run workflow".
 
-- Tracks ad group status changes (ENABLED, PAUSED, REMOVED)
-- Detects new ad groups added to the account
-- Detects ad groups removed from the account
-- Logs all changes with timestamps to a Google Sheet
-- Sends Slack notifications when changes are detected
+## Spreadsheet tabs
 
-### Required Sheets
+| Tab | Purpose |
+|---|---|
+| **Ad Copy Log** | Append-only log of every ad seen on every run |
+| **Ad Snapshot** | Current state of all unique ads (first seen, last seen, times seen) |
+| **Change Log** | Records when ads appear, change description, or disappear |
 
-- `Status Log` - Where status changes are recorded
-- `AdGroup Snapshot` - Stores the last known status of each ad group
+## Running locally
 
-### Status Log Columns
+```bash
+npm install
 
-| Column | Description |
-|--------|-------------|
-| Timestamp | When the change was detected |
-| Account Name | Google Ads account name |
-| Account ID | Google Ads account ID |
-| Campaign Name | Campaign containing the ad group |
-| AdGroup ID | Unique identifier for the ad group |
-| AdGroup Name | Name of the ad group |
-| Previous Status | Status before the change |
-| New Status | Status after the change |
-| Change Type | Description of the change type |
+export SERPAPI_KEY="your-key"
+export GOOGLE_SHEETS_ID="your-sheet-id"
+export GOOGLE_CREDENTIALS='{"type":"service_account",...}'
+export KEYWORDS="keyword one,keyword two"
+export SLACK_WEBHOOK_URL=""  # optional
 
----
-
-## Ad Status Tracker
-
-`ad-status-tracker.js` - Monitors ad status and approval status changes and logs them to a Google Sheet.
-
-### Features
-
-- Tracks ad status changes (ENABLED, PAUSED, REMOVED)
-- Tracks policy approval status changes (APPROVED, APPROVED_LIMITED, AREA_OF_INTEREST_ONLY, DISAPPROVED, UNDER_REVIEW)
-- Detects new ads added to the account
-- Detects ads removed from the account
-- Logs all changes with timestamps to a Google Sheet
-- Sends Slack notifications when changes are detected
-
-### Required Sheets
-
-- `Status Log` - Where status changes are recorded
-- `Ad Snapshot` - Stores the last known status of each ad
-
-### Status Log Columns
-
-| Column | Description |
-|--------|-------------|
-| Timestamp | When the change was detected |
-| Account Name | Google Ads account name |
-| Account ID | Google Ads account ID |
-| Campaign Name | Campaign containing the ad |
-| AdGroup Name | Ad group containing the ad |
-| Ad ID | Unique identifier for the ad |
-| Ad Type | Type of ad (RESPONSIVE_SEARCH_AD, etc.) |
-| Previous Status | Status before the change |
-| New Status | Status after the change |
-| Previous Approval Status | Approval status before the change |
-| New Approval Status | Approval status after the change |
-| Change Type | Description of the change type |
-
----
-
-## Setup Instructions
-
-### 1. Create a Google Sheet
-
-Each script needs its own Google Sheet (or you can use separate sheets within one spreadsheet). The script will automatically create the required sheets if they don't exist.
-
-### 2. Configure Script Settings
-
-At the top of each script file, update the configuration:
-
-```javascript
-var SPREADSHEET_URL = "YOUR_SPREADSHEET_URL_HERE";
+npm run scrape
 ```
-
-### 3. (Optional) Set Up Slack Notifications
-
-1. Create a Slack incoming webhook for your channel
-2. Create a helper spreadsheet with two columns:
-   - Column A: Account ID (e.g., 123-456-7890)
-   - Column B: Slack Webhook URL
-3. Configure the helper spreadsheet URL in the script:
-   ```javascript
-   var SLACK_HELPER_SPREADSHEET_URL = 'YOUR_SLACK_HELPER_SPREADSHEET_URL_HERE';
-   ```
-
-### 4. Add to Google Ads
-
-1. Go to Google Ads > Tools & Settings > Scripts
-2. Create a new script
-3. Paste the contents of the desired script file
-4. Authorize the script
-5. Schedule it to run at your desired frequency
-
----
-
-## How The Scripts Work
-
-1. **First Run:** The script captures the current state and stores it in the snapshot sheet. No changes are logged on the first run.
-
-2. **Subsequent Runs:** The script compares current statuses against the snapshot and logs any changes to the Status Log sheet.
-
-3. **Change Detection:** Each script detects:
-   - Status changes
-   - New items added
-   - Items removed
-   - (For keywords/ads) Serving/approval status changes
-
----
-
-## Scheduling Recommendations
-
-| Frequency | Use Case |
-|-----------|----------|
-| **Hourly** | High-volume accounts, time-sensitive monitoring |
-| **Daily** | Most accounts (recommended) |
-| **Weekly** | Smaller accounts with infrequent changes |
-
----
-
-## Troubleshooting
-
-- **No changes detected:** Normal if no statuses have changed since the last run
-- **First run shows no changes:** Expected - the first run only creates the baseline snapshot
-- **Slack notifications not working:** Verify the webhook URL and helper spreadsheet configuration
-- **UNKNOWN values:** Some fields may not be available for all entity types; this is expected behavior
